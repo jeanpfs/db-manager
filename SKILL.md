@@ -118,6 +118,37 @@ else
 fi
 ```
 
+### Step 6 — Cache table list (automatic, after connection test)
+```bash
+source "$SESSION_FILE"
+SCHEMA_CACHE="/tmp/.db_tables_$(echo "$PWD" | md5 -q 2>/dev/null || echo "$PWD" | md5sum | cut -c1-8)"
+psql "$DATABASE_URL" -t -A -c "SELECT schemaname || '.' || tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename" > "$SCHEMA_CACHE" 2>/dev/null
+echo "Cached $(wc -l < "$SCHEMA_CACHE" | tr -d ' ') tables in $SCHEMA_CACHE"
+```
+
+This runs automatically — no user opt-in needed. The file is lightweight (just table names).
+
+---
+
+## Query Protocol — MANDATORY before writing any SQL
+
+**NEVER guess column names.** Before writing any SELECT, INSERT, UPDATE, or DELETE query, you MUST:
+
+1. **Identify which tables** will be referenced in the query
+2. **Run `\d tablename`** for each table to get the real columns
+3. **Only then** write the SQL using the actual column names from step 2
+
+```bash
+source "$SESSION_FILE"
+psql "$DATABASE_URL" -c "\d tablename"
+```
+
+**This is not optional.** Skipping this step leads to queries referencing non-existent columns (e.g., `a.url` when the column lives in a separate `automation_urls` table).
+
+**Exception:** If you already ran `\d tablename` earlier in the same conversation for the same table, you may reuse that information without re-running the command.
+
+**Exception:** If the user provides the exact SQL to run, execute it as-is without schema checking (the user knows their schema).
+
 ---
 
 ## `~/.claude/scripts/db` helper script
@@ -355,7 +386,14 @@ cp -r db-manager ~/.claude/skills/
 
 - [ ] Session setup completed
 - [ ] Connection test passed
+- [ ] Table list cached (Step 6 — automatic)
 - [ ] Schema regenerated if environment changed
+
+## Per-query checklist
+
+- [ ] Identified tables involved in the query
+- [ ] Ran `\d tablename` for each table (or reused from earlier in conversation)
+- [ ] Query uses ONLY real column names from `\d` output
 
 ---
 
