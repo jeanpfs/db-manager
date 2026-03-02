@@ -130,24 +130,78 @@ This runs automatically — no user opt-in needed. The file is lightweight (just
 
 ---
 
-## Query Protocol — MANDATORY before writing any SQL
+## Subagent Query Protocol — MANDATORY for all database operations
 
-**NEVER guess column names.** Before writing any SELECT, INSERT, UPDATE, or DELETE query, you MUST:
+**Every database query MUST be delegated to a subagent.** This keeps the main conversation context clean and avoids token accumulation from schema inspection and query results.
 
-1. **Identify which tables** will be referenced in the query
-2. **Run `\d tablename`** for each table to get the real columns
-3. **Only then** write the SQL using the actual column names from step 2
+### How to delegate
 
-```bash
-source "$SESSION_FILE"
-psql "$DATABASE_URL" -c "\d tablename"
-```
+Use the **Agent tool** with the following parameters:
 
-**This is not optional.** Skipping this step leads to queries referencing non-existent columns (e.g., `a.url` when the column lives in a separate `automation_urls` table).
+- `subagent_type`: `"general-purpose"`
+- `description`: Short description of the query (e.g., "Query active users")
+- `prompt`: Use the template below, filling in the placeholders
 
-**Exception:** If you already ran `\d tablename` earlier in the same conversation for the same table, you may reuse that information without re-running the command.
+### Subagent prompt template
 
-**Exception:** If the user provides the exact SQL to run, execute it as-is without schema checking (the user knows their schema).
+~~~
+You are a PostgreSQL database assistant. Execute queries autonomously.
+
+## Connection
+- Helper script: ~/.claude/scripts/db
+- Session file: SESSION_FILE_PATH
+- Available tables: TABLE_LIST
+
+## Task
+USER_QUESTION
+
+## Mandatory protocol
+1. For each table referenced, run: ~/.claude/scripts/db -c "\d tablename"
+2. Use ONLY real columns returned by \d — never guess column names
+3. Build and execute SQL via: ~/.claude/scripts/db -c "<sql>"
+4. If results exceed 20 rows, summarize: totals, patterns, sample rows
+
+## Destructive operations (DELETE, UPDATE, DROP, TRUNCATE, ALTER)
+If the task requires a destructive query:
+- Do NOT execute it
+- Return: the proposed SQL, estimated rows affected (via SELECT COUNT with same WHERE), and rationale
+- The main agent will handle user confirmation
+
+## Response format
+Return ONLY:
+- The SQL executed (or proposed, if destructive)
+- The result (summarized if large)
+- Relevant observations (if any)
+Do NOT include long explanations of your process.
+~~~
+
+### Filling the template
+
+Before spawning the subagent, the main agent MUST:
+1. Ensure session setup is complete (session file exists in `/tmp`)
+2. Read the cached table list from `/tmp/.db_tables_*`
+3. Replace placeholders:
+   - `SESSION_FILE_PATH` → actual path (e.g., `/tmp/.db_session_a1b2c3d4`)
+   - `TABLE_LIST` → contents of `/tmp/.db_tables_*` file
+   - `USER_QUESTION` → the user's request in natural language
+
+### After the subagent returns
+
+- Present the result to the user concisely
+- If the subagent returned a destructive operation proposal, follow the confirmation protocol in the security rules section
+- If the subagent failed or returned incoherent results, fall back to direct execution (run `\d` and queries in the main context)
+
+---
+
+## Subagent fallback
+
+If the subagent fails (timeout, connection error, incoherent result), fall back to direct execution:
+
+1. Run `\d tablename` for relevant tables in the main context
+2. Build and execute the SQL directly via `~/.claude/scripts/db -c "<sql>"`
+3. This is the pre-subagent behavior — it works, just uses more tokens
+
+This fallback ensures database access is never blocked by subagent issues.
 
 ---
 
@@ -273,6 +327,21 @@ Before adding, check if a database section already exists. If it does, merge rat
 
 ---
 
+### Subagent handoff for destructive operations
+
+When the subagent returns a destructive operation proposal, it will contain:
+- **SQL**: the exact query to execute
+- **Rows affected**: estimated count
+- **Rationale**: why this query was built
+
+The main agent MUST then:
+1. Display the confirmation block below (using the SQL and row count from the subagent)
+2. Wait for user confirmation (`CONFIRM` or `CONFIRM PRODUCTION`)
+3. If confirmed, execute the query directly: `~/.claude/scripts/db -c "<sql>"`
+4. Log to audit file as usual
+
+---
+
 ### Mandatory confirmation protocol
 
 Before executing any destructive operation, ALWAYS print this block:
@@ -391,16 +460,21 @@ cp -r db-manager ~/.claude/skills/
 
 ## Per-query checklist
 
-- [ ] Identified tables involved in the query
-- [ ] Ran `\d tablename` for each table (or reused from earlier in conversation)
-- [ ] Query uses ONLY real column names from `\d` output
+- [ ] Session file exists in `/tmp` (setup completed)
+- [ ] Table list cache exists in `/tmp/.db_tables_*`
+- [ ] Spawned subagent with correct prompt template (all placeholders filled)
+- [ ] Reviewed subagent result before presenting to user
+- [ ] If destructive: followed confirmation protocol in main context
 
 ---
 
 ## Token strategy
 
-| Approach              | Tokens per operation                     |
-|-----------------------|------------------------------------------|
-| MCP postgres          | ~2,000–5,000 (schema always injected)    |
-| `db -c` direct        | ~50–100                                  |
-| `docs/schema.sql`     | Read on demand only                      |
+| Approach                        | Tokens in main context           |
+|---------------------------------|----------------------------------|
+| MCP postgres                    | ~2,000–5,000 (schema always injected) |
+| `db -c` direct (old approach)  | ~500–5,000 (schema + result)     |
+| Subagent delegation (current)   | ~50–200 (only summarized result) |
+| `docs/schema.sql`              | Read on demand only              |
+
+The subagent absorbs all schema inspection and query execution tokens. The main context only receives the final summarized result.
