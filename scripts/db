@@ -1,0 +1,33 @@
+#!/bin/bash
+SESSION_FILE="/tmp/.db_session_$(echo "$PWD" | md5 -q 2>/dev/null || echo "$PWD" | md5sum | cut -c1-8)"
+
+if [ -f "$SESSION_FILE" ]; then
+  if [ "$(stat -f %Op "$SESSION_FILE" 2>/dev/null || stat -c %a "$SESSION_FILE")" != "600" ]; then
+    echo "Session file has unsafe permissions. Run: chmod 600 $SESSION_FILE" >&2
+    exit 1
+  fi
+  if grep -qvE '^(DATABASE_URL|DB_LABEL|DB_SOURCE)=' "$SESSION_FILE"; then
+    echo "Session file contains unexpected content. Refusing to load." >&2
+    exit 1
+  fi
+  source "$SESSION_FILE"
+fi
+
+if [ -z "$DATABASE_URL" ]; then
+  for f in .env .env.local .env.development .env.dev; do
+    if [ -f "$f" ]; then
+      val=$(grep -E "^(DATABASE_URL|DB_URL|POSTGRES_URL)" "$f" | head -1 | cut -d= -f2- | sed 's/^["'\'']\|["'\''"]$//g')
+      [ -n "$val" ] && export DATABASE_URL="$val" && break
+    fi
+  done
+fi
+
+if [ -z "$DATABASE_URL" ]; then
+  echo "No connection configured. Ask Claude: 'set up the database for this session'"
+  exit 1
+fi
+
+LABEL=$(grep DB_LABEL "$SESSION_FILE" 2>/dev/null | cut -d= -f2 || echo "fallback .env")
+echo "[db] $LABEL" >&2
+export PGDATABASE="$DATABASE_URL"
+psql "$@"
