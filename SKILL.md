@@ -9,7 +9,7 @@ description: >
   the database", "switch to staging/production", "roda esse SQL", "consulta o banco",
   "mostra as tabelas", "acessa o banco".
 argument-hint: "[SQL query or command]"
-allowed-tools: Bash, Read, Grep, Glob, Write, Edit
+allowed-tools: Bash(psql *), Bash(pg_dump *), Bash(source *), Bash(cat *), Bash(cp *), Bash(chmod *), Bash(mkdir *), Bash(grep *), Bash(echo *), Bash(jq *), Bash(~/.claude/scripts/db *), Read, Grep, Glob, Write, Edit
 ---
 
 # DB Manager — PostgreSQL Direct Access
