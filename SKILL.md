@@ -9,6 +9,7 @@ description: >
   the database", "switch to staging/production", "list the tables", "describe schema",
   "what's in the database", "show data from".
 argument-hint: "[SQL query or command]"
+license: MIT
 allowed-tools: Bash(psql *), Bash(pg_dump *), Bash(grep *), Bash(echo *), Bash(printf *), Bash(mkdir *), Bash(chmod *), Bash(test *), Bash(shasum *), Bash(sha256sum *), Bash(find *), Bash(cut *), Bash(head *), Bash(basename *), Bash(tr *), Bash(sed *), Bash(date *), Bash(install *), Read, Grep, Glob, Write, Edit
 ---
 
