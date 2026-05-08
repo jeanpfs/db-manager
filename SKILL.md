@@ -9,18 +9,18 @@ description: >
   the database", "switch to staging/production", "roda esse SQL", "consulta o banco",
   "mostra as tabelas", "acessa o banco".
 argument-hint: "[SQL query or command]"
-allowed-tools: Bash(psql *), Bash(pg_dump *), Bash(source *), Bash(grep *), Bash(echo *), Read, Grep, Glob, Write, Edit
+allowed-tools: Bash(psql *), Bash(pg_dump *), Bash(grep *), Bash(echo *), Bash(mkdir *), Bash(chmod *), Bash(test *), Bash(shasum *), Read, Grep, Glob, Write, Edit
 ---
 
 # DB Manager — PostgreSQL Direct Access
 
 ## Session status
 
-!`SESSION_FILE="/tmp/.db_session_$(echo "$PWD" | md5 -q 2>/dev/null || echo "$PWD" | md5sum | cut -c1-8)"; if [ -f "$SESSION_FILE" ]; then source "$SESSION_FILE"; echo "CONNECTED: ${DB_LABEL} (source: ${DB_SOURCE})"; else echo "NO_SESSION"; fi`
+!`SESSION_DIR="${HOME}/.cache/db-manager"; SESSION_KEY=$(echo "$PWD" | shasum -a 256 | cut -c1-16); SESSION_FILE="${SESSION_DIR}/session_${SESSION_KEY}"; if [ -f "$SESSION_FILE" ] && [ ! -L "$SESSION_FILE" ]; then DB_LABEL=$(grep '^DB_LABEL=' "$SESSION_FILE" | cut -d= -f2-); DB_SOURCE=$(grep '^DB_SOURCE=' "$SESSION_FILE" | cut -d= -f2-); echo "CONNECTED: ${DB_LABEL} (source: ${DB_SOURCE})"; else echo "NO_SESSION"; fi`
 
 ## Core principle
 
-Use `source .env && psql "$DATABASE_URL"` — nothing more. Credentials stay in project `.env` files, session lives in `/tmp` (volatile).
+Read `DATABASE_URL` from project `.env` files only when needed. The session file stores **only metadata** (path to the `.env` and a label) — never the URL itself. Never `source` the session file: it is data, not code.
 
 ## Session setup (only if NO_SESSION)
 
@@ -30,37 +30,67 @@ Use `source .env && psql "$DATABASE_URL"` — nothing more. Credentials stay in 
 find . \( -name ".env" -o -name ".env.local" -o -name ".env.development" -o -name ".env.dev" \
   -o -name ".env.staging" -o -name ".env.production" \) \
   -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | while read -r f; do
-  match=$(grep -E "^(DATABASE_URL|DB_URL|POSTGRES_URL)" "$f" 2>/dev/null | head -1)
+  match=$(grep -E "^(DATABASE_URL|DB_URL|POSTGRES_URL)=" "$f" 2>/dev/null | head -1)
   [ -n "$match" ] && echo "$f"
 done
 ```
 
-2. If multiple found, ask which one. If only one, use it.
+2. If multiple found, ask the user which one. If only one, use it.
 
-3. Save session and test:
+3. Save session metadata under `~/.cache/db-manager/` (mode `600`):
 
 ```bash
 ENV_PATH="<selected .env>"
 PROJECT=$(basename "$PWD" | tr -cd 'a-zA-Z0-9._-')
-SESSION_FILE="/tmp/.db_session_$(echo "$PWD" | md5 -q 2>/dev/null || echo "$PWD" | md5sum | cut -c1-8)"
-DB_URL=$(grep -E "^(DATABASE_URL|DB_URL|POSTGRES_URL)" "$ENV_PATH" | head -1 | cut -d= -f2- | sed "s/^[\"']\|[\"']$//g")
+LABEL_SUFFIX="<dev|staging|production|...>"
 
-(umask 077; cat > "$SESSION_FILE" << EOF
-DATABASE_URL=${DB_URL}
-DB_LABEL=${PROJECT}/<label>
-DB_SOURCE=${ENV_PATH}
-EOF
-)
+SESSION_DIR="${HOME}/.cache/db-manager"
+mkdir -p "$SESSION_DIR" && chmod 700 "$SESSION_DIR"
 
-source "$SESSION_FILE"
-psql "$DATABASE_URL" -c "SELECT 1" > /dev/null 2>&1 && echo "Connected: ${DB_LABEL}" || echo "FAILED"
+SESSION_KEY=$(echo "$PWD" | shasum -a 256 | cut -c1-16)
+SESSION_FILE="${SESSION_DIR}/session_${SESSION_KEY}"
+
+if [ -L "$SESSION_FILE" ]; then
+  echo "REFUSING: session path is a symlink"; exit 1
+fi
+
+umask 077
+{
+  printf 'DB_ENV_PATH=%s\n' "$ENV_PATH"
+  printf 'DB_LABEL=%s/%s\n' "$PROJECT" "$LABEL_SUFFIX"
+  printf 'DB_SOURCE=%s\n' "$ENV_PATH"
+} > "$SESSION_FILE"
+chmod 600 "$SESSION_FILE"
+```
+
+4. Test the connection without persisting the URL:
+
+```bash
+DB_URL=$(grep -E "^(DATABASE_URL|DB_URL|POSTGRES_URL)=" "$ENV_PATH" | head -1 | cut -d= -f2-)
+DB_URL="${DB_URL%\"}"; DB_URL="${DB_URL#\"}"
+DB_URL="${DB_URL%\'}"; DB_URL="${DB_URL#\'}"
+
+psql "$DB_URL" -c "SELECT 1" >/dev/null 2>&1 && echo "Connected" || echo "FAILED"
 ```
 
 ## Running queries
 
+Re-read the URL from the `.env` referenced by the session every time — never persist it:
+
 ```bash
-source "$SESSION_FILE" && psql "$DATABASE_URL" -c "SELECT ..."
+SESSION_DIR="${HOME}/.cache/db-manager"
+SESSION_KEY=$(echo "$PWD" | shasum -a 256 | cut -c1-16)
+SESSION_FILE="${SESSION_DIR}/session_${SESSION_KEY}"
+
+ENV_PATH=$(grep '^DB_ENV_PATH=' "$SESSION_FILE" | cut -d= -f2-)
+DB_URL=$(grep -E "^(DATABASE_URL|DB_URL|POSTGRES_URL)=" "$ENV_PATH" | head -1 | cut -d= -f2-)
+DB_URL="${DB_URL%\"}"; DB_URL="${DB_URL#\"}"
+DB_URL="${DB_URL%\'}"; DB_URL="${DB_URL#\'}"
+
+psql "$DB_URL" -c "SELECT ..."
 ```
+
+> Note on argv exposure: PostgreSQL connection URIs as the first positional argument to `psql` may be visible in `/proc/<pid>/cmdline` on Linux while the process runs. For higher assurance, configure `~/.pgpass` (mode `600`) and pass only host/db/user instead of the full URL.
 
 ## Query protocol — MANDATORY
 
@@ -75,14 +105,17 @@ source "$SESSION_FILE" && psql "$DATABASE_URL" -c "SELECT ..."
 
 ## Destructive operations
 
-For destructive operations (DELETE, UPDATE, DROP, TRUNCATE, etc.), follow the mandatory confirmation protocol in [security-rules.md](references/security-rules.md). **Never skip confirmation.**
+For destructive operations, follow the mandatory confirmation protocol in [security-rules.md](references/security-rules.md). **Never skip confirmation.**
 
 ## Schema dump (opt-in)
 
 Only when the user explicitly asks:
 
 ```bash
-source "$SESSION_FILE"
+ENV_PATH=$(grep '^DB_ENV_PATH=' "$SESSION_FILE" | cut -d= -f2-)
+DB_URL=$(grep -E "^(DATABASE_URL|DB_URL|POSTGRES_URL)=" "$ENV_PATH" | head -1 | cut -d= -f2-)
+DB_URL="${DB_URL%\"}"; DB_URL="${DB_URL#\"}"
+DB_URL="${DB_URL%\'}"; DB_URL="${DB_URL#\'}"
 mkdir -p docs
-pg_dump "$DATABASE_URL" --schema-only --no-owner --no-acl --no-comments > docs/schema.sql
+pg_dump "$DB_URL" --schema-only --no-owner --no-acl --no-comments > docs/schema.sql
 ```

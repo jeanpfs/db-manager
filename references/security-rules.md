@@ -3,17 +3,22 @@
 ## Query classification
 
 **SAFE** — execute directly:
-- `SELECT`, `EXPLAIN`, `EXPLAIN ANALYZE`
+- `SELECT` (read-only)
+- `EXPLAIN` (without `ANALYZE`)
 - `\dt`, `\d`, `\dn`, `\l` and other psql meta-commands
 - `pg_dump --schema-only`
 
 **REQUIRE STRICT CONFIRMATION** — never execute without explicit approval:
-- `DELETE`, `UPDATE`, `TRUNCATE`
-- `DROP TABLE`, `DROP SCHEMA`, `DROP DATABASE`, `DROP INDEX`
-- `ALTER TABLE ... DROP COLUMN`, `ALTER TABLE ... RENAME`, `ALTER TABLE ... ALTER COLUMN ... TYPE`
+- `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `MERGE`, `UPSERT`
+- `EXPLAIN ANALYZE` (it executes the underlying statement)
+- `DROP TABLE`, `DROP SCHEMA`, `DROP DATABASE`, `DROP INDEX`, `DROP FUNCTION`, `DROP TRIGGER`
+- `CREATE TABLE`, `CREATE INDEX`, `CREATE OR REPLACE FUNCTION`, `CREATE TRIGGER`
+- `ALTER` (any form)
 - `GRANT`, `REVOKE`, `ALTER DEFAULT PRIVILEGES`
-- Bulk `INSERT` (more than 50 records or `INSERT` without explicit `VALUES`)
-- Any auto-generated query that modifies data
+- `COPY ... FROM`, `COPY ... TO PROGRAM`
+- `VACUUM FULL`, `REINDEX`, `CLUSTER`, `REFRESH MATERIALIZED VIEW`
+- `CALL`, `DO` (anonymous code blocks)
+- Any auto-generated query that modifies data or schema
 
 ## Mandatory confirmation protocol
 
@@ -80,7 +85,7 @@ Wait for the user to type literally `CONFIRM PRODUCTION`.
 
 After every confirmed destructive operation, append to the audit log (created with `umask 077`):
 
-Path: `/tmp/.db_audit_$(echo "$PWD" | md5 -q 2>/dev/null || echo "$PWD" | md5sum | cut -c1-8).log`
+Path: `${HOME}/.cache/db-manager/audit_$(echo "$PWD" | shasum -a 256 | cut -c1-16).log` (mode `600`)
 
 ```
 [<timestamp>] DESTRUCTIVE OPERATION EXECUTED
@@ -92,11 +97,11 @@ Confirmed by: <CONFIRM or CONFIRM PRODUCTION>
 
 ## Security model summary
 
-| What leaks if...              | Impact                                              |
-|-------------------------------|-----------------------------------------------------|
-| `~/.claude/db-map.json` leaks | Only project names and file paths                   |
-| `/tmp/.db_session_*` leaks    | Active session URL (gone on reboot)                 |
-| `.env.staging` leaks          | Credentials for that environment (pre-existing risk)|
-| `docs/schema.sql` leaks       | Database structure, no data                         |
+| What leaks if...                       | Impact                                              |
+|----------------------------------------|-----------------------------------------------------|
+| `~/.cache/db-manager/session_*` leaks  | Project label and `.env` path (no credentials)      |
+| `~/.cache/db-manager/audit_*.log` leaks| Past destructive queries and labels (no credentials)|
+| `.env.staging` leaks                   | Credentials for that environment (pre-existing risk)|
+| `docs/schema.sql` leaks                | Database structure, no data                         |
 
 The real risk remains the `.env` files themselves — which existed before this skill.
