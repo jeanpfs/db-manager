@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run shellcheck
+        run: shellcheck install.sh
+
+  install-smoke:
+    name: install smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax check
+        run: bash -n install.sh
+
+      - name: Install into temporary HOME
+        shell: bash
+        run: |
+          set -euo pipefail
+          FAKE_HOME=$(mktemp -d)
+          HOME="$FAKE_HOME" ./install.sh
+          test -f "$FAKE_HOME/.claude/skills/db-manager/SKILL.md"
+          test -f "$FAKE_HOME/.claude/skills/db-manager/LICENSE"
+          test -f "$FAKE_HOME/.claude/skills/db-manager/README.md"
+          test -f "$FAKE_HOME/.claude/skills/db-manager/references/security-rules.md"
+
+      - name: Refuse symlinked target
+        shell: bash
+        run: |
+          set -euo pipefail
+          FAKE_HOME=$(mktemp -d)
+          mkdir -p "$FAKE_HOME/.claude/skills"
+          ln -s /tmp "$FAKE_HOME/.claude/skills/db-manager"
+          if HOME="$FAKE_HOME" ./install.sh 2>/dev/null; then
+            echo "ERROR: installer accepted symlinked target"
+            exit 1
+          fi
+
+      - name: Backup existing install instead of deleting
+        shell: bash
+        run: |
+          set -euo pipefail
+          FAKE_HOME=$(mktemp -d)
+          HOME="$FAKE_HOME" ./install.sh
+          marker="$FAKE_HOME/.claude/skills/db-manager/MARKER"
+          : > "$marker"
+          HOME="$FAKE_HOME" ./install.sh
+          # The original install must survive as a timestamped backup
+          ls -d "$FAKE_HOME/.claude/skills/db-manager.bak."* >/dev/null
+
+  hash-portability:
+    name: hash helper (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: sha256 helper resolves on this OS
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v sha256sum >/dev/null 2>&1; then
+            digest=$(printf %s "/some/path" | sha256sum | cut -c1-16)
+          else
+            digest=$(printf %s "/some/path" | shasum -a 256 | cut -c1-16)
+          fi
+          test -n "$digest"
+          test "${#digest}" -eq 16

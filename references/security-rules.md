@@ -47,7 +47,9 @@ Before executing any destructive operation, ALWAYS print this block:
 **Protocol rules:**
 - Never shorten or simplify this block
 - Always show the exact query — no summaries or paraphrasing
-- Always run a `SELECT COUNT(*)` with the same `WHERE` condition first and show the row count
+- For row-level mutations (`INSERT`, `UPDATE`, `DELETE`, `MERGE`, `UPSERT`, `TRUNCATE`), run a `SELECT COUNT(*)` with the same `WHERE` condition first and show the row count
+- For DDL/privilege operations (`ALTER`, `DROP`, `CREATE`, `GRANT`, `REVOKE`, `REINDEX`, `VACUUM FULL`, etc.), the `Rows affected` line becomes `Impact:` followed by a one-line description of what the statement changes (e.g. "drops table `users` and all its data", "adds NOT NULL constraint on `orders.status`")
+- For `EXPLAIN ANALYZE`, the impact is the side effects of the underlying statement — describe those
 - If the environment is `staging` or `production`, add an extra warning line:
   ```
   ║  🔴 WARNING: you are connected to STAGING / PRODUCTION      ║

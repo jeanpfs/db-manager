@@ -9,14 +9,16 @@ description: >
   the database", "switch to staging/production", "roda esse SQL", "consulta o banco",
   "mostra as tabelas", "acessa o banco".
 argument-hint: "[SQL query or command]"
-allowed-tools: Bash(psql *), Bash(pg_dump *), Bash(grep *), Bash(echo *), Bash(mkdir *), Bash(chmod *), Bash(test *), Bash(shasum *), Read, Grep, Glob, Write, Edit
+allowed-tools: Bash(psql *), Bash(pg_dump *), Bash(grep *), Bash(echo *), Bash(printf *), Bash(mkdir *), Bash(chmod *), Bash(test *), Bash(shasum *), Bash(sha256sum *), Bash(find *), Bash(cut *), Bash(head *), Bash(basename *), Bash(tr *), Bash(sed *), Bash(date *), Bash(install *), Read, Grep, Glob, Write, Edit
 ---
 
 # DB Manager — PostgreSQL Direct Access
 
 ## Session status
 
-!`SESSION_DIR="${HOME}/.cache/db-manager"; SESSION_KEY=$(echo "$PWD" | shasum -a 256 | cut -c1-16); SESSION_FILE="${SESSION_DIR}/session_${SESSION_KEY}"; if [ -f "$SESSION_FILE" ] && [ ! -L "$SESSION_FILE" ]; then DB_LABEL=$(grep '^DB_LABEL=' "$SESSION_FILE" | cut -d= -f2-); DB_SOURCE=$(grep '^DB_SOURCE=' "$SESSION_FILE" | cut -d= -f2-); echo "CONNECTED: ${DB_LABEL} (source: ${DB_SOURCE})"; else echo "NO_SESSION"; fi`
+!`SESSION_DIR="${HOME}/.cache/db-manager"; if command -v sha256sum >/dev/null 2>&1; then SESSION_KEY=$(printf %s "$PWD" | sha256sum | cut -c1-16); else SESSION_KEY=$(printf %s "$PWD" | shasum -a 256 | cut -c1-16); fi; SESSION_FILE="${SESSION_DIR}/session_${SESSION_KEY}"; if [ -f "$SESSION_FILE" ] && [ ! -L "$SESSION_FILE" ]; then DB_LABEL=$(grep '^DB_LABEL=' "$SESSION_FILE" | cut -d= -f2-); DB_SOURCE=$(grep '^DB_SOURCE=' "$SESSION_FILE" | cut -d= -f2-); echo "CONNECTED: ${DB_LABEL} (source: ${DB_SOURCE})"; else echo "NO_SESSION"; fi`
+
+> Hash helper used throughout: `sha256sum` on Linux, `shasum -a 256` on macOS — both produce the same hex digest, the snippets fall back automatically.
 
 ## Core principle
 
@@ -47,7 +49,11 @@ LABEL_SUFFIX="<dev|staging|production|...>"
 SESSION_DIR="${HOME}/.cache/db-manager"
 mkdir -p "$SESSION_DIR" && chmod 700 "$SESSION_DIR"
 
-SESSION_KEY=$(echo "$PWD" | shasum -a 256 | cut -c1-16)
+if command -v sha256sum >/dev/null 2>&1; then
+  SESSION_KEY=$(printf %s "$PWD" | sha256sum | cut -c1-16)
+else
+  SESSION_KEY=$(printf %s "$PWD" | shasum -a 256 | cut -c1-16)
+fi
 SESSION_FILE="${SESSION_DIR}/session_${SESSION_KEY}"
 
 if [ -L "$SESSION_FILE" ]; then
@@ -79,7 +85,11 @@ Re-read the URL from the `.env` referenced by the session every time — never p
 
 ```bash
 SESSION_DIR="${HOME}/.cache/db-manager"
-SESSION_KEY=$(echo "$PWD" | shasum -a 256 | cut -c1-16)
+if command -v sha256sum >/dev/null 2>&1; then
+  SESSION_KEY=$(printf %s "$PWD" | sha256sum | cut -c1-16)
+else
+  SESSION_KEY=$(printf %s "$PWD" | shasum -a 256 | cut -c1-16)
+fi
 SESSION_FILE="${SESSION_DIR}/session_${SESSION_KEY}"
 
 ENV_PATH=$(grep '^DB_ENV_PATH=' "$SESSION_FILE" | cut -d= -f2-)
@@ -118,4 +128,31 @@ DB_URL="${DB_URL%\"}"; DB_URL="${DB_URL#\"}"
 DB_URL="${DB_URL%\'}"; DB_URL="${DB_URL#\'}"
 mkdir -p docs
 pg_dump "$DB_URL" --schema-only --no-owner --no-acl --no-comments > docs/schema.sql
+```
+
+## Managing the session
+
+Switch to a different `.env` for the same project:
+
+```bash
+# Re-run the "Session setup" steps with a different ENV_PATH; the file is
+# overwritten in place under ~/.cache/db-manager/.
+```
+
+Forget the current session:
+
+```bash
+SESSION_DIR="${HOME}/.cache/db-manager"
+if command -v sha256sum >/dev/null 2>&1; then
+  SESSION_KEY=$(printf %s "$PWD" | sha256sum | cut -c1-16)
+else
+  SESSION_KEY=$(printf %s "$PWD" | shasum -a 256 | cut -c1-16)
+fi
+rm -f "${SESSION_DIR}/session_${SESSION_KEY}"
+```
+
+Forget all sessions:
+
+```bash
+rm -rf "${HOME}/.cache/db-manager"
 ```

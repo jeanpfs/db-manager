@@ -33,7 +33,12 @@ if [ -d "$SOURCE_DIR/references" ]; then
       done
 fi
 
-if [ -e "$TARGET_DIR" ] && [ ! -L "$TARGET_DIR" ]; then
+if [ -L "$TARGET_DIR" ]; then
+  echo "ERROR: $TARGET_DIR is a symlink; refusing to install" >&2
+  exit 1
+fi
+
+if [ -e "$TARGET_DIR" ]; then
   BACKUP_DIR="${TARGET_DIR}.bak.$(date +%Y%m%d%H%M%S)"
   mv "$TARGET_DIR" "$BACKUP_DIR"
   echo "Existing install moved to $BACKUP_DIR"
