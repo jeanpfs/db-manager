@@ -6,8 +6,8 @@ description: >
   access (SELECT, INSERT, UPDATE, DELETE, pg_dump, psql). Also use when starting a
   session in a project that has .env files with DATABASE_URL. Triggers: "query the
   database", "run this SQL", "show me the tables", "check the schema", "connect to
-  the database", "switch to staging/production", "roda esse SQL", "consulta o banco",
-  "mostra as tabelas", "acessa o banco".
+  the database", "switch to staging/production", "list the tables", "describe schema",
+  "what's in the database", "show data from".
 argument-hint: "[SQL query or command]"
 allowed-tools: Bash(psql *), Bash(pg_dump *), Bash(grep *), Bash(echo *), Bash(printf *), Bash(mkdir *), Bash(chmod *), Bash(test *), Bash(shasum *), Bash(sha256sum *), Bash(find *), Bash(cut *), Bash(head *), Bash(basename *), Bash(tr *), Bash(sed *), Bash(date *), Bash(install *), Read, Grep, Glob, Write, Edit
 ---

@@ -43,9 +43,9 @@ This copies `SKILL.md`, `LICENSE`, `README.md` and `references/` into `~/.claude
 In Claude Code, ask any database question — for example:
 
 ```
-mostra as tabelas
+show me the tables
 run SELECT count(*) from users
-quais usuários cadastraram nas últimas 24h?
+which users signed up in the last 24h?
 ```
 
 The skill will:
