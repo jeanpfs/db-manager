@@ -1,0 +1,62 @@
+name: Bug report
+description: Report a defect in the skill or installer
+title: "[bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Redact any `DATABASE_URL`, password, host or token before pasting anything. For vulnerabilities, do **not** open an issue: use the private report link in the issue chooser.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: A clear, concrete description. Paste the exact command you ran and the output you saw.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: macOS 14.5 / Ubuntu 22.04
+    validations:
+      required: true
+  - type: input
+    id: shell
+    attributes:
+      label: Shell
+      placeholder: bash 5.2 / zsh 5.9
+  - type: input
+    id: psql
+    attributes:
+      label: "`psql --version`"
+  - type: input
+    id: claude
+    attributes:
+      label: "`claude --version` (Claude Code)"
+  - type: input
+    id: version
+    attributes:
+      label: Skill version (commit or tag)
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / context
+      description: Redact any DATABASE_URL or credentials before pasting.
+      render: shell
