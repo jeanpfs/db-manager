@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: shellcheck
@@ -13,7 +16,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run shellcheck
-        run: shellcheck install.sh
+        run: |
+          # Every tracked shell script: *.sh files plus anything with a shell shebang
+          files=$(git ls-files '*.sh'; git grep -lE '^#!.*\b(ba|z|da)?sh\b' -- . ':!*.md' || true)
+          files=$(printf '%s\n' "$files" | sort -u | sed '/^$/d')
+          echo "$files"
+          # shellcheck disable=SC2086
+          shellcheck $files
 
   install-smoke:
     name: install smoke (${{ matrix.os }})

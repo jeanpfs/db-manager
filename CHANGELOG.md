@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- YAML issue forms (bug report, feature request) and Dependabot for GitHub Actions.
+- Credentials-handling section in `SECURITY.md`.
+
+### Changed
+
+- CI shellcheck now covers every tracked shell script; workflow permissions limited to `contents: read`.
+
 ## [0.1.0] - 2026-05-08
 
 ### Added
