@@ -8,6 +8,8 @@ A [Claude Code](https://docs.claude.com/en/docs/claude-code) skill for safe Post
 
 The skill auto-detects `DATABASE_URL` in your project's `.env` files, lets the agent run `psql` against the right environment, and gates destructive operations behind an explicit confirmation protocol.
 
+![db-manager demo: Claude Code asks which environment to use, reads the pending orders, then shows a confirmation block with the exact UPDATE before marking order 1042 as paid](assets/demo.gif)
+
 ## Features
 
 - Auto-discovers `.env`, `.env.local`, `.env.development`, `.env.staging`, `.env.production` with `DATABASE_URL` / `DB_URL` / `POSTGRES_URL`
