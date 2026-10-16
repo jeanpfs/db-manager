@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: publish release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tag matches declared version
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME#v}"
+          declared=$(jq -r .version metadata.json)
+          if [ "$declared" != "$ver" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match metadata.json version $declared"
+            exit 1
+          fi
+          fm_ver=$(sed -n '1,/^---$/{s/^version:[[:space:]]*//p}' SKILL.md | tr -d '"' | head -n1)
+          if [ -n "$fm_ver" ] && [ "$fm_ver" != "$ver" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match SKILL.md version $fm_ver"
+            exit 1
+          fi
+
+      - name: Sanity checks
+        run: |
+          set -euo pipefail
+          bash -n install.sh
+          shellcheck install.sh
+          head -n1 SKILL.md | grep -qx -- '---'
+          grep -q '^name: db-manager$' SKILL.md
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME#v}"
+          pat="${ver//./\\.}"
+          sed -n "/^## \[$pat\]/,/^## /p" CHANGELOG.md | grep -v '^## ' > notes.md || true
+          if [ -s notes.md ] && grep -q '[^[:space:]]' notes.md; then
+            echo "Release notes taken from CHANGELOG.md"
+          else
+            echo "No CHANGELOG section for $ver; falling back to generated notes"
+            rm -f notes.md
+          fi
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          if [ -f notes.md ]; then
+            notes=(--notes-file notes.md)
+          else
+            notes=(--generate-notes)
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            if [ -f notes.md ]; then
+              gh release edit "$tag" --title "$tag" --notes-file notes.md
+            else
+              echo "Release $tag already exists; leaving its notes untouched"
+            fi
+          else
+            gh release create "$tag" --verify-tag --title "$tag" "${notes[@]}"
+          fi

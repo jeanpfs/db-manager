@@ -6,14 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-16
+
 ### Added
 
+- skills.sh metadata: `metadata.json` and the `license` frontmatter field.
 - YAML issue forms (bug report, feature request) and Dependabot for GitHub Actions.
 - Credentials-handling section in `SECURITY.md`.
+- Tag-driven release workflow that publishes GitHub releases with notes taken from this changelog.
 
 ### Changed
 
+- Remaining Portuguese strings translated to English.
 - CI shellcheck now covers every tracked shell script; workflow permissions limited to `contents: read`.
+- Author identity standardized across project metadata.
 
 ## [0.1.0] - 2026-05-08
 
@@ -31,5 +37,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`.
 - GitHub Actions CI running `shellcheck` and a smoke install on `ubuntu-latest` and `macos-latest`.
 
-[Unreleased]: https://github.com/jeanpfs/db-manager/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/jeanpfs/db-manager/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/jeanpfs/db-manager/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/jeanpfs/db-manager/releases/tag/v0.1.0

@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.1.1",
   "organization": "jeanpfs",
   "date": "May 2026",
   "abstract": "Claude Code skill for safe PostgreSQL access from project .env files. Auto-detects DATABASE_URL across environments, runs psql with mandatory schema inspection before SQL generation, and gates every destructive operation behind an explicit CONFIRM block (with a stronger CONFIRM PRODUCTION lock for production-labeled sessions). Sessions are stored under ~/.cache/db-manager/ as metadata only — credentials are never persisted.",
